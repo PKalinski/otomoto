@@ -150,9 +150,16 @@ def scoreCarAd (score_sr, car_make, car_model, segment, user_type, user_cnt, pri
     if body_type == 'combi':
         score += 20
 
-
     if user_cnt == 1:
         score += 20
+
+    if price > 150000:
+        score -= 50
+    if price > 120000:
+        score -= 40
+    if price > 90000:
+        score -= 30
+
 
 
     return score

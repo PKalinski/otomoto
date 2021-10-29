@@ -12,43 +12,18 @@ import glob
 import uuid
 import helperFunctions
 
-from selenium.webdriver import Firefox
-from selenium.webdriver.common.by import By
-from selenium.webdriver.firefox.options import Options
+
 
 main_html = "https://www.otomoto.pl/osobowe/od-2017/warszawa/?search%5Bfilter_enum_fuel_type%5D%5B0%5D=petrol&search%5Border%5D=created_at_first%3Adesc&search%5Bbrand_program_id%5D%5B0%5D=&search%5Bdist%5D=50&search%5Bcountry%5D="
 
 READ_HTTP = 0
 
 
-# opts = Options()
-# opts.headless = True
-# assert opts.headless  # Operating in headless mode
-# browser = Firefox(options=opts)
-# browser.implicitly_wait(10)
-# browser.get('https://www.otomoto.pl/')
 
 
 
-#
-# browser.get("https://www.otomoto.pl/osobowe/od-2017/warszawa/?search%5Bfilter_enum_fuel_type%5D%5B0%5D=petrol&search%5Border%5D=created_at_first%3Adesc&search%5Bbrand_program_id%5D%5B0%5D=&search%5Bdist%5D=50&search%5Bcountry%5D=")
-# browser.save_full_page_screenshot("screenshot.png")
-#
-#
-# with open ('website.html', 'w', encoding="utf-8") as file:
-#     file.write (browser.page_source)
-#
-# try:
-#     browser.find_element(By.XPATH,'//*[@id="onetrust-accept-btn-handler"]').click()
-#     browser.save_full_page_screenshot("screenshot_2.png")
-#
-#     html_string = browser.page_source
-#     with open ('website.html', 'w', encoding="utf-8") as file:
-#         file.write (browser.page_source)
-#
-# finally:
-#     browser.close()
-#     browser.quit()
+
+
 
 
 con = sqlite3.connect('otomoto.db')
@@ -149,7 +124,8 @@ for i in range (20):
                         "car_make, title_short, title_complement,"
                         "title_2nd_word, title_3rd_word, "
                         "price, price_fv, year, fuel_type, mileage, "
-                        "fst_seen_dt, last_seen_dt, last_detail_seen_dt,"
+                        "sr_fst_run_id, sr_last_run_id, "
+                        "scoring_sr_run_id, scoring_ad_run_id,"
                         "segment_code, car_model, score_sr,"
                         "html_ad, html_main_pic) "
                         "values (?,?,"
@@ -158,14 +134,14 @@ for i in range (20):
                         "?,?,"
                         "?,?,?,?,?,"
                         "?,?,?,"
-                        "?,?,?,"
+                        "?,?,?,?,"
                         "?,?)",
                         (v_ad_id, v_dt_string,
                          v_file_uid, v_user_id,
                          v_make, v_title_short, v_title_complement,
                          v_title_2nd_word, v_title_3rd_word,
                          v_price, 0, v_year, v_fuel_type, v_mileage,
-                         'null', 'null', 'null',
+                         v_file_run, v_file_run, None, None,
                          v_segment, v_model, -1,
                          v_html_link, '--')
                         )
@@ -178,14 +154,14 @@ for i in range (20):
                         "set upd_ts = ?, last_sres_file_uid = ?, user_id = ?, car_make = ?, title_short = ?, title_complement = ?,"
                             "title_2nd_word = ?, title_3rd_word = ?, "
                             "price = ?, price_fv = ?, year = ?, fuel_type = ?, mileage = ?, "
-                            "fst_seen_dt = ?, last_seen_dt = ?, last_detail_seen_dt = ?,"
+                            "sr_last_run_id = ?, "
                             "segment_code = ?, car_model = ?, score_sr = ?,"
                             "html_ad = ?"
                         "where AD_ID = ?",
                         ( v_dt_string, v_file_uid, v_user_id, v_make, v_title_short, v_title_complement,
                           v_title_2nd_word, v_title_3rd_word,
                           v_price, 0, v_year, v_fuel_type, v_mileage,
-                          'null', 'null', 'null',
+                          v_file_run,
                           v_segment, v_model, -1, v_html_link,
                           v_ad_id)
                         )
@@ -301,7 +277,7 @@ sql_text_adslast = """select AD_ID from ADS_LAST
                         where USER_ID is not null 
                             and SCORE_SR >= 40 
                             and SCORE_AD is null 
-                            and order by SCORE_SR desc"""
+                        order by SCORE_SR desc"""
 sql_out = list (cur.execute(sql_text_adslast).fetchmany(50))
 for r in sql_out:
     (v_file_uid, html_string) = helperFunctions.getAdFile (r[0],v_file_run, con)
@@ -311,8 +287,17 @@ for r in sql_out:
     cur.execute(sql_text_adslast, (v_body_type, v_country_origin, r[0]))
 
 
-sql_text = """select from ADS_LAST a, USERS u where """
-#v_score = helperFunctions.scoreCarAd (score_sr, car_make, car_model, segment, user_type, user_cnt, price, country_origin, body_type):
+sql_text = """select a.AD_ID, a.SCORE_SR, a.CAR_MAKE, a.CAR_MODEL, a.SEGMENT_CODE, u.USER_TYPE, u.ADD_CNT, a.PRICE, a.AD_COUNTRY_ORIGIN, a.AD_BODY_TYPE 
+                from ADS_LAST a, 
+                    USERS u 
+                where a.USER_ID = u.USER_ID
+                    and a.AD_FILE_UID is not null
+                """
+sql_out = list (cur.execute(sql_text).fetchmany(50))
+for r in sql_out:
+    v_score_ad = helperFunctions.scoreCarAd ( r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9])
+    sql_text_upd = "update ADS_LAST set SCORE_AD = ? where AD_ID = ?"
+    cur.execute(sql_text_upd, (v_score_ad, r[0]) )
 
 
 
